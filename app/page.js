@@ -1,113 +1,238 @@
-import Image from "next/image";
+"use client";
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon, PlusIcon } from "lucide-react";
+import { format } from "date-fns";
+import { api } from "@/convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { UserButton } from "@clerk/nextjs";
 
-export default function Home() {
+const Navbar = () => (
+  <nav className="bg-primary text-primary-foreground p-4">
+    <div className="container mx-auto flex justify-between items-center">
+      <h1 className="text-2xl font-bold">Task Manager</h1>
+      <UserButton />
+    </div>
+  </nav>
+);
+
+const TaskModal = ({ task, onClose, onSave, uid }) => {
+  const [title, setTitle] = useState(task ? task.title : "");
+  const [deadline, setDeadline] = useState(
+    task ? new Date(task.deadline) : null
+  );
+  const addTask = useMutation(api.Task.AddTask);
+  const handleSave = async () => {
+    if (task) {
+      if (validation()) {
+        onSave({
+          title: title,
+          deadline: deadline.toLocaleDateString(),
+          taskID: task._id,
+        });
+        setTitle("");
+        setDeadline("");
+        onClose();
+      }
+      return;
+    }
+
+    if (!validation()) {
+      return;
+    }
+    const result = await addTask({
+      title: title,
+      clerkID: uid,
+      deadline: deadline.toLocaleDateString(),
+      status: false,
+    });
+    if (result) {
+      setTitle("");
+      setDeadline("");
+      onClose();
+    }
+  };
+
+  const validation = () => {
+    if (!title || !deadline.toLocaleDateString()) {
+      alert("Please fill in all fields");
+      return false;
+    }
+    return true;
+  };
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{task ? "Edit Task" : "Add New Task"}</DialogTitle>
+        <DialogDescription>
+          {task
+            ? "Edit your task here. Click save when you are done"
+            : "Add a new task to your list. Click save when you are done"}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="title" className="text-right">
+            Title
+          </Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="col-span-3"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="deadline" className="text-right">
+            Deadline
+          </Label>
+          <div className="col-span-3">
+            <Calendar
+              mode="single"
+              selected={deadline}
+              onSelect={setDeadline}
+              initialFocus
             />
-          </a>
+          </div>
         </div>
       </div>
+      <DialogFooter>
+        <Button type="submit" onClick={handleSave}>
+          Save
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+};
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+const Dashboard = (props) => {
+  const [tasks, setTasks] = useState([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const fetchTask = useQuery(api.Task.Task, { clerkID: props.uid });
+
+  useEffect(() => {
+    if (fetchTask) setTasks(fetchTask);
+  }, [fetchTask]);
+
+  return (
+    <div className="container mx-auto mt-8 pl-[10%] pr-[10%]">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">Your Tasks</h2>
+        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusIcon className="mr-2 h-4 w-4" /> Add Task
+            </Button>
+          </DialogTrigger>
+          <TaskModal onClose={() => setIsAddModalOpen(false)} uid={props.uid} />
+        </Dialog>
+      </div>
+      <div className="grid gap-4">
+        {tasks.map((task) => (
+          <TaskItem object={task} key={task._id} onOpen={setIsAddModalOpen} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const TaskItem = ({ object }) => {
+  const [editingTask, setEditingTask] = useState();
+  const updateTaskInfo = useMutation(api.Task.updateTaskInfo);
+  const deleeTask = useMutation(api.Task.deleteTask);
+  const updateStatus = useMutation(api.Task.updateStatus);
+  const handleUpdateTask = async (obj) => {
+    if (obj) {
+      await updateTaskInfo(obj);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    const propmt = confirm("Are you sure you want to delete this task?");
+    if (propmt) {
+      await deleeTask({ taskID: object._id });
+    }
+  };
+
+  const handleChange = async (e) => {
+    const newval = e.target.checked;
+    await updateStatus({ taskID: object._id, status: newval });
+  };
+
+  return (
+    <div className="bg-card text-card-foreground p-4 rounded-lg shadow flex justify-between items-center">
+      <div className="flex gap-5 items-center">
+        <input
+          type="checkbox"
+          value={object.status}
+          className="w-5 h-5"
+          onChange={handleChange}
         />
+        <div>
+          <h3 className="text-lg  font-semibold">
+            {object.status ? <del>{object.title}</del> : object.title}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Deadline:{" "}
+            {object.status ? (
+              <del>{format(object.deadline, "PPP")}</del>
+            ) : (
+              format(object.deadline, "PPP")
+            )}
+          </p>
+        </div>
       </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+      <div className="space-x-2">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" onClick={() => setEditingTask(object)}>
+              Edit
+            </Button>
+          </DialogTrigger>
+          {editingTask && (
+            <TaskModal
+              task={editingTask}
+              onClose={() => setEditingTask(null)}
+              onSave={handleUpdateTask}
+            />
+          )}
+        </Dialog>
+        <Button variant="destructive" onClick={handleDeleteTask}>
+          Delete
+        </Button>
       </div>
-    </main>
+    </div>
+  );
+};
+
+export default function Component() {
+  const user = useQuery(api.User.currentUser);
+  const [userID, setUserID] = useState();
+
+  useEffect(() => {
+    if (user) setUserID(user?.tokenIdentifier.split("|")[1]);
+  }, [user]);
+  return (
+    <div className="min-h-screen bg-background">
+      {user && (
+        <>
+          <Navbar />
+          <Dashboard uid={userID} />
+        </>
+      )}
+    </div>
   );
 }
