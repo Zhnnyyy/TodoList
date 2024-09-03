@@ -32,7 +32,8 @@ export function ConvexClientProvider({ children }) {
           )}
         </div>
       </Unauthenticated> */}
-      <Authenticated>{children}</Authenticated>
+      {/* <Authenticated>{children}</Authenticated> */}
+      {children}
       <AuthLoading>
         <div className="h-[100vh] flex justify-center items-center">
           <l-quantum size="150" speed="1.75" color="black"></l-quantum>
