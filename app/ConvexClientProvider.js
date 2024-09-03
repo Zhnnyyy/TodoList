@@ -16,12 +16,12 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 export function ConvexClientProvider({ children }) {
   return (
     <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-      {/* <Unauthenticated>
+      <Unauthenticated>
         <div className="h-[100vh] flex justify-center items-center">
-          <SignIn />
+          {/* <SignIn /> */}
           <SignUp />
         </div>
-      </Unauthenticated> */}
+      </Unauthenticated>
       <Authenticated>{children}</Authenticated>
       <AuthLoading>
         <div className="h-[100vh] flex justify-center items-center">
